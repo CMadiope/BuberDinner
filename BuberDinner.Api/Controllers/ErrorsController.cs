@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using BuberDinner.Application.Common.Errors;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,7 +12,12 @@ namespace BuberDinner.Api.Controllers
         {
             var context = HttpContext.Features.Get<IExceptionHandlerFeature>();
             var exception = context?.Error;
-            return Problem(detail: exception?.Message);
+            var (statusCode, message) = exception switch
+            {
+                IServiceException serviceException => ((int)serviceException.StatusCode, serviceException.ErrorMessage),
+                _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.")
+            };
+            return Problem(statusCode: statusCode, title: message);
         }
 
     }
