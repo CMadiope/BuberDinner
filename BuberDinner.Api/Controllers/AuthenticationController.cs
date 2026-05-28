@@ -1,8 +1,10 @@
-using BuberDinner.Application.Common.Errors;
-using BuberDinner.Application.Services.Authentication;
+using BuberDinner.Application.Authentication.Commands.Register;
+using BuberDinner.Application.Authentication.Common;
+using BuberDinner.Application.Authentication.Queries;
 using BuberDinner.Contracts.Authentication;
 using BuberDinner.Domain.Common.Errors;
 using ErrorOr;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BuberDinner.Api.Controllers
@@ -10,15 +12,19 @@ namespace BuberDinner.Api.Controllers
     [Route("auth")]
     public class AuthenticationController : ApiController
     {
-        private readonly IAuthenticationService _authenticationService;
-        public AuthenticationController(IAuthenticationService authenticationService)
+
+        private readonly IMediator _mediator;
+
+        public AuthenticationController(IMediator mediator)
         {
-            _authenticationService = authenticationService;
+            _mediator = mediator;
         }
+
         [HttpPost("register")]
-        public IActionResult Register(RegisterRequest request)
+        public async Task<IActionResult> Register(RegisterRequest request)
         {
-            ErrorOr<AuthenticationResult> registerResult = _authenticationService.Register(request.FirstName, request.LastName, request.Email, request.Password);
+            var command = new RegisterCommand(request.FirstName, request.LastName, request.Email, request.Password);
+            ErrorOr<AuthenticationResult> registerResult = await _mediator.Send(command);
 
             return registerResult.Match(
                             authResult =>
@@ -33,19 +39,16 @@ namespace BuberDinner.Api.Controllers
 
         private static AuthenticationResponse MapAuthResult(AuthenticationResult authResult)
         {
-            return new AuthenticationResponse(authResult.user.Id, authResult.user.FirstName, authResult.user.LastName, authResult.user.Email, authResult.Token);
+            return new AuthenticationResponse(authResult.User.Id, authResult.User.FirstName, authResult.User.LastName, authResult.User.Email, authResult.Token);
         }
 
         [HttpPost("login")]
-        public IActionResult Login(LoginRequest request)
+        public async Task<IActionResult> Login(LoginRequest request)
         {
-            var result = _authenticationService.Login(request.Email, request.Password);
+            var query = new LoginQuery(request.Email, request.Password);
+            ErrorOr<AuthenticationResult> loginResult = await _mediator.Send(query);
 
-            if (result.IsError && result.FirstError == Errors.Authentication.InvalidCredentials)
-            {
-                return Problem(statusCode: StatusCodes.Status401Unauthorized, title: result.FirstError.Description);
-            }
-            return result.Match(
+            return loginResult.Match(
                 authResult =>
                 {
                     var response = MapAuthResult(authResult);
@@ -54,5 +57,6 @@ namespace BuberDinner.Api.Controllers
                 errors => Problem(errors)
             );
         }
+
     }
 }
